@@ -2,7 +2,18 @@
 
 **DockLab** est un outil Bash léger permettant de déployer instantanément des conteneurs Docker (Debian, Oracle Linux) préconfigurés avec Systemd et SSH, prêts à servir de cibles de déploiement pour **Ansible**.
 
----
+> [!WARNING]
+> ### ⚠️ NE PAS UTILISER EN PRODUCTION
+> 
+> Ce projet est exclusivement conçu pour des **environnements de test local, de développement et d'apprentissage (labs Ansible)**.
+> 
+> **Raisons de sécurité :**
+> - **Conteneurs privilégiés** : Les conteneurs tournent avec l'option `--privileged` et le montage `/sys/fs/cgroup` pour permettre le fonctionnement de `systemd`, ce qui contourne l'isolation standard de Docker.
+> - **Sudoer sans mot de passe** : L'utilisateur créé dispose des droits `sudo` complets sans mot de passe (`NOPASSWD: ALL`).
+> - **Exposition du service SSH** : Les conteneurs exécutent un serveur SSH configuré de manière permissive.
+> - **Mots de passe par défaut** : Des mots de passe fixes/faibles sont attribués lors de la création des utilisateurs.
+> 
+> **N'utilisez jamais ce script sur un serveur exposé à Internet ou en environnement de production.**
 
 ## 🚀 Fonctionnalités
 
