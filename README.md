@@ -28,11 +28,13 @@ DockLab/
 └── README.md
 ```
 
-🛠️ Prérequis
+# 🛠️ Prérequis
+
 Docker installé et configuré (avec les droits d'exécution sans sudo pour votre utilisateur).
 
 
-📖 Aide complète du script (deploy.sh)
+# 📖 Aide complète du script (deploy.sh)
+
 Voici le détail complet des options acceptées par le script :
 
 ```Plaintext
@@ -47,7 +49,8 @@ Options :
   --start              Redémarrer les conteneurs arrêtés.
   --ansible            Générer l'inventaire Ansible (00_inventory.yml).
 ```
-💻 Exemples d'utilisation
+# 💻 Exemples d'utilisation
+
 Rendez d'abord le script exécutable :
 
 ```Bash
@@ -96,11 +99,14 @@ Supprime tous les conteneurs du lab et nettoie le fichier ~/.ssh/known_hosts des
 ```Bash
 ./deploy.sh --drop
 ```
-🙏 Crédits & Remerciements
+
+# 🙏 Crédits & Remerciements
+
 Ce projet s'inspire des travaux et formations DevOps proposés par Xavki :
 
 - 🐙 **GitHub** : [priximmo](https://github.com/priximmo)
 - 📺 **Chaîne YouTube** : [Xavki - Linux & DevOps](https://www.youtube.com/c/xavki-linux)
 
-📜 Licence
-Ce projet est sous licence MIT. Voir le fichier LICENSE pour plus de détails.
+# 📜 Licence
+
+Ce projet est sous licence WTFPL. Voir le fichier LICENSE pour plus de détails.
