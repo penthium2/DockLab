@@ -58,7 +58,13 @@ Options :
   --create [nb] [os]   Créer des conteneurs.
                        [nb] : nombre de conteneurs (défaut: 1). Doit être un entier supérieur à 0.
                        [os] : debian ou oraclelinux (si non renseigné, le choix sera demandé).
-  --drop               Supprimer tous les conteneurs créés par le script.
+  --drop [noms|--all]  Supprimer des conteneurs créés par le script.
+                      [noms] : liste des conteneurs à supprimer (ex: user-test-1 user-apache).
+                      --all : supprimer tous les conteneurs, réseaux et images du lab.
+                      Sans argument : menu interactif de sélection des conteneurs.
+  --stop [noms|--all]  Arrêter des conteneurs.
+                       [noms] : liste des conteneurs à arrêter (ex: user-test-1 user-apache).
+                       --all : arrêter tous les conteneurs du lab.
   --infos              Afficher l'IP et le nom des conteneurs actifs/arrêtés.
   --start              Redémarrer les conteneurs arrêtés.
   --ansible            Générer l'inventaire Ansible (00_inventory.yml).
@@ -141,17 +147,42 @@ Crée la structure ansible_dir/ et génère le fichier 00_inventory.yml contenan
 ```Bash
 ./deploy.sh --ansible
 ```
-3. Redémarrage des conteneurs (--start)
+3. Arrêt de conteneurs (--stop)
+Arrête un ou plusieurs conteneurs précisés par leurs noms :
+
+```Bash
+./deploy.sh --stop penthium2-test-1 penthium2-apache
+```
+
+Les noms disponibles se retrouvent via `./deploy.sh --infos`. Pour arrêter tous les conteneurs du lab :
+
+```Bash
+./deploy.sh --stop --all
+```
+
+4. Redémarrage des conteneurs (--start)
 Redémarre l'ensemble des conteneurs arrêtés et relance le service SSH à l'intérieur :
 
 ```Bash
 ./deploy.sh --start
 ```
-4. Suppression des conteneurs (--drop)
-Supprime tous les conteneurs du lab et nettoie le fichier ~/.ssh/known_hosts des clés obsolètes :
+5. Suppression des conteneurs (--drop)
+Supprime un ou plusieurs conteneurs précisés par leurs noms :
+
+```Bash
+./deploy.sh --drop penthium2-test-1 penthium2-apache
+```
+
+Sans argument, un menu interactif liste les conteneurs du lab parmi lesquels choisir (un nom introuvable déclenche aussi ce menu) :
 
 ```Bash
 ./deploy.sh --drop
+```
+
+Pour supprimer tous les conteneurs du lab, les réseaux et les images sans confirmation, et nettoyer le fichier ~/.ssh/known_hosts des clés obsolètes :
+
+```Bash
+./deploy.sh --drop --all
 ```
 
 # 🙏 Crédits & Remerciements

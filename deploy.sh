@@ -22,7 +22,7 @@ spinner() {
     done
 }
 killspinner() {
-kill $pidspin 
+kill $pidspin
 printf "\n"
 }
 
@@ -36,7 +36,13 @@ Options :
                        [nb] : nombre de conteneurs (défaut: 1). Doit être un entier supérieur à 0.
                        [os] : debian ou oraclelinux (si non renseigné, le choix sera demandé).
   --baker              Construire les images Docker et déployer les conteneurs selon infra.yml.
-  --drop               Supprimer tous les conteneurs créés par le script.
+  --drop [noms|--all]  Supprimer des conteneurs créés par le script.
+                     [noms] : liste des conteneurs à supprimer (ex: $USER-test-1 $USER-apache).
+                     --all : supprimer tous les conteneurs, réseaux et images du lab.
+                     Sans argument : menu interactif de sélection des conteneurs.
+  --stop [noms|--all]  Arrêter des conteneurs.
+                       [noms] : liste des conteneurs à arrêter (ex: $USER-test-1 $USER-apache).
+                       --all : arrêter tous les conteneurs du lab.
   --infos              Afficher l'IP et le nom des conteneurs.
   --start              Redémarrer les conteneurs arrêtés.
   --ansible            Générer l'inventaire Ansible (00_inventory.yml).
@@ -88,7 +94,7 @@ getDockerImageName() {
 
 
 baker() {
-    for infra_name in $(yq 'keys | .[]' infra.yml) ; do 
+    for infra_name in $(yq 'keys | .[]' infra.yml) ; do
     infra_os=$(yq  ".${infra_name}.os" infra.yml)
     infra_expports=$(yq eval '.'"${infra_name}"'.private_ports | join (" ")' infra.yml 2> /dev/null)
     if [[ -n "${infra_expports}" ]] ; then
@@ -97,7 +103,7 @@ baker() {
     else
         dockerfile='dockerfile-inline = "FROM base_image"'
         tagports=''
-    fi 
+    fi
     dock="$dock
 target \"${USER}_${infra_name}\" {
     contexts = {
@@ -293,27 +299,98 @@ createNodes() {
     infosNodes
 }
 
-dropNodes() {
-    echo "Suppression des conteneurs..."
+selectLabContainer() {
+    local -a cases=()
+    local container
+    local i=1
     local containers
-    containers=$(docker ps -a -q -f "name=^/${USER}")
+    local choice
 
-    if [ -n "$containers" ]; then
-        docker rm -f $containers > /dev/null
-        sed -i '/172.17.0./d' "$HOME/.ssh/known_hosts" 2>/dev/null
-        echo "Fin de la suppression des docks."
-    else
-        echo "Aucun conteneur à supprimer."
-    fi
-    if docker network rm $(docker network ls -q -f name=$USER*) > /dev/null 2>&1; then
-        echo "Fin de la suppression des réseaux."
-    fi
-    if docker rmi $(docker images --format "{{.Repository}}:{{.Tag}}" | grep "^$USER-") >/dev/null 2>&1; then
-        echo "Fin de la suppression des images Docker."
+    containers=$(docker ps -a -f "name=^/${USER}" --format '{{.Names}}')
+
+    if [ -z "$containers" ]; then
+        echo "Aucun conteneur du lab disponible." >&2
+        return 1
     fi
 
+    echo "Sélectionnez un conteneur du lab à supprimer :" >&2
+    while read -r container; do
+        cases[$i]="$container"
+        echo "  $i) $container" >&2
+        i=$((i+1))
+    done <<< "$containers"
 
+    read -rp "Votre choix [1-$((i-1))] (Entrée pour annuler) : " choice >&2
+    case "$choice" in
+        ""|0)
+            echo "Annulation." >&2
+            return 1
+            ;;
+        *)
+            if [[ "$choice" =~ ^[1-9][0-9]*$ ]] && [ -n "${cases[$choice]}" ]; then
+                echo "${cases[$choice]}"
+            else
+                echo "Erreur : Choix invalide." >&2
+                return 1
+            fi
+            ;;
+    esac
+}
 
+dropNodes() {
+    if [ "$1" = "--all" ]; then
+        echo "Suppression de tous les conteneurs du lab..."
+        local containers
+        containers=$(docker ps -a -q -f "name=^/${USER}")
+
+        if [ -n "$containers" ]; then
+            docker rm -f $containers > /dev/null
+            sed -i '/172.17.0./d' "$HOME/.ssh/known_hosts" 2>/dev/null
+            echo "Fin de la suppression des docks."
+        else
+            echo "Aucun conteneur à supprimer."
+        fi
+        if docker network rm $(docker network ls -q -f name=$USER*) > /dev/null 2>&1; then
+            echo "Fin de la suppression des réseaux."
+        fi
+        if docker rmi $(docker images --format "{{.Repository}}:{{.Tag}}" | grep "^$USER-") >/dev/null 2>&1; then
+            echo "Fin de la suppression des images Docker."
+        fi
+        return
+    fi
+
+    if [ $# -eq 0 ]; then
+        echo "Aucun conteneur précisé pour --drop." >&2
+    fi
+
+    local name missing=0
+    for name in "$@"; do
+        if docker inspect "$name" >/dev/null 2>&1; then
+            case "$name" in
+                "$USER"-*)
+                    if docker rm -f "$name" >/dev/null 2>&1; then
+                        echo "Conteneur $name supprimé."
+                    else
+                        echo "Erreur : Impossible de supprimer le conteneur $name." >&2
+                    fi
+                    ;;
+                *)
+                    echo "Erreur : Le conteneur '$name' n'est pas un conteneur du lab (préfixe $USER- attendu)." >&2
+                    missing=1
+                    ;;
+            esac
+        else
+            echo "Erreur : Conteneur '$name' introuvable." >&2
+            missing=1
+        fi
+    done
+
+    if [ $# -eq 0 ] || [ "$missing" -eq 1 ]; then
+        local picked
+        if picked=$(selectLabContainer); then
+            docker rm -f "$picked" >/dev/null 2>&1 && echo "Conteneur $picked supprimé."
+        fi
+    fi
 }
 
 startNodes() {
@@ -330,6 +407,47 @@ startNodes() {
     else
         echo "Aucun conteneur trouvé."
     fi
+}
+
+stopNodes() {
+    if [ "$1" = "--all" ]; then
+        local containers
+        containers=$(docker ps -q -f "name=^/${USER}")
+        if [ -n "$containers" ]; then
+            echo "Arrêt de tous les conteneurs du lab..."
+            docker stop $containers
+            echo "Tous les conteneurs du lab sont arrêtés."
+        else
+            echo "Aucun conteneur actif trouvé."
+        fi
+        return
+    fi
+
+    if [ $# -eq 0 ]; then
+        echo "Erreur : Aucun conteneur précisé pour --stop." >&2
+        help
+        exit 1
+    fi
+
+    local name
+    for name in "$@"; do
+        if docker inspect "$name" >/dev/null 2>&1; then
+            case "$name" in
+                "$USER"-*)
+                    if docker stop "$name" >/dev/null 2>&1; then
+                        echo "Conteneur $name arrêté."
+                    else
+                        echo "Erreur : Impossible d'arrêter le conteneur $name." >&2
+                    fi
+                    ;;
+                *)
+                    echo "Erreur : Le conteneur '$name' n'est pas un conteneur du lab (préfixe $USER- attendu)." >&2
+                    ;;
+            esac
+        else
+            echo "Erreur : Conteneur '$name' introuvable." >&2
+        fi
+    done
 }
 
 createAnsible() {
@@ -376,7 +494,7 @@ infosNodes() {
         return
     fi
 
-    for conteneur in $containers; do      
+    for conteneur in $containers; do
         docker inspect -f '   => {{.Name}} - IP: {{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}} - Ports hôte: {{range $p, $b := .HostConfig.PortBindings}}{{range $b}}{{.HostPort}} {{end}}{{end}}' "$conteneur"
     done
     echo ""
@@ -405,12 +523,31 @@ case "$1" in
         createNodes "$2" "$3"
         ;;
     --drop)
-        [ $# -gt 1 ] && echo "Avertissement : Arguments ignorés pour --drop." >&2
-        dropNodes
+        if [ "$2" = "--all" ]; then
+            [ $# -gt 2 ] && echo "Avertissement : Arguments ignorés pour --drop --all." >&2
+            dropNodes --all
+        else
+            shift
+            dropNodes "$@"
+        fi
         ;;
     --start)
         [ $# -gt 1 ] && echo "Avertissement : Arguments ignorés pour --start." >&2
         startNodes
+        ;;
+    --stop)
+        if [ $# -eq 1 ]; then
+            echo "Erreur : Merci de préciser --all ou une liste de conteneurs pour --stop." >&2
+            help
+            exit 1
+        fi
+        if [ "$2" = "--all" ]; then
+            [ $# -gt 2 ] && echo "Avertissement : Arguments ignorés pour --stop --all." >&2
+            stopNodes --all
+        else
+            shift
+            stopNodes "$@"
+        fi
         ;;
     --ansible)
         [ $# -gt 1 ] && echo "Avertissement : Arguments ignorés pour --ansible." >&2
